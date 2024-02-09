@@ -1,0 +1,167 @@
+setwd("D:\\learning\\semaster5\\Statistical inference\\project\\Data Sets")
+#read data
+customer_data <- read.csv("CustomerSegmentation.csv", header = TRUE)
+
+#useful summary of data set structure
+str(customer_data)
+
+###################### Data cleansing ###############################
+
+#printing some rows to know the problems in data
+head(customer_data) #problem:there is negative and zero values in age 
+
+#making a Check for missing values
+missing_values <- colSums(is.na(customer_data))
+print(missing_values) #there are nulls in annual income
+
+# Replace missing values in Annual income column with the mean of data
+#customer_data$`Annual Income`[is.na(customer_data$`Annual Income`)] <- mean(customer_data$`Annual Income`, na.rm = TRUE)
+#it should work in numeric columns only
+numeric_cols <- sapply(customer_data, is.numeric)
+customer_data[, numeric_cols] <- lapply(customer_data[, numeric_cols],
+                                        function(x) ifelse(is.na(x), mean(x, na.rm = TRUE), x))
+
+#check if the null problem is solved or not
+missing_values <- colSums(is.na(customer_data))
+print(missing_values) #solved
+
+#printing data again
+head(customer_data) 
+
+#there are negative values in age -> multiply by -1
+customer_data$Age[customer_data$Age < 0] <- customer_data$Age[customer_data$Age < 0]*(-1)
+
+#if age =0 -> replace it with the mean
+customer_data$Age[customer_data$Age == 0] <- mean(customer_data$Age, na.rm = TRUE)
+
+#convert the floating age to integer (tends to zero)
+customer_data$Age <- floor(customer_data$Age)
+
+#printing data again to know if the problem is solved or not
+head(customer_data) #solved
+
+######################Data Visualization###############################
+
+#Scatter plot (with x_axis, y_axis and whole plot naming)
+plot(customer_data$Spending.Score..1.100.,ylab = "Spanding score",main = "Scatter plot of spending score")
+plot(customer_data$Annual.Income..k..,customer_data$Spending.Score..1.100.,ylab = "Spanding score",xlab = "Annual income",main = "scatter plot of spending score")
+plot(customer_data$Age,customer_data$Spending.Score..1.100.,ylab = "Spanding score",xlab = "Age",main = "scatter plot of spending score")
+
+#Histogram (with x_axis and whole plot naming & changing the color of columns to lightblue)
+hist(customer_data$Spending.Score..1.100.,col = "lightblue", xlab = "Spending score", main = "Histogram of spending score")
+#this histogram shows that the most frequent spending score group in this data is between 40 & 60 spending score
+
+#Boxplot (with x_axis and whole plot naming & changing the color of columns to lightgreen)
+boxplot(customer_data$Age ,col = "lightblue", xlab = "Age", main = "Boxplot of spending score")
+boxplot(customer_data$Spending.Score..1.100.,col = "lightblue", xlab = "Spending score", main = "Boxplot of spending score")
+#this boxplot means that the data does not contain outliers
+
+boxplot(customer_data$Annual.Income,col = "lightblue", xlab = "Annual Income", main = "Box Plot: Annual Income")
+#this boxplot means that the data contains outliers
+
+Q1 <- quantile(customer_data$Annual.Income,0.25)
+Q3 <- quantile(customer_data$Annual.Income,0.75)
+IQR <- Q3 - Q1
+
+lower_bound <- Q1 - 1.5*IQR
+upper_bound <- Q3 + 1.5*IQR
+
+outliers <- customer_data$Annual.Income[customer_data$Annual.Income < lower_bound | customer_data$Annual.Income > upper_bound]
+print(outliers)
+
+customer_data <- subset(customer_data , (customer_data$Annual.Income > lower_bound & customer_data$Annual.Income < upper_bound))
+
+#display it again to check the remaval of outliers
+boxplot(customer_data$Annual.Income,col = "lightblue", xlab = "Annual Income", main = "Box Plot: Annual Income")
+
+#Barplot
+barplot(table(customer_data$Gender),col = "lightblue", xlab = "Gender", ylab = "Count", main = "Bar Plot: Gender")
+#from this barplot we know that number of females spendes more than males
+
+colnames(customer_data)
+correlation_matrix <- cor(customer_data[, c("Age", "Annual.Income..k..", "Spending.Score..1.100.")])
+heatmap(correlation_matrix, xlab = "Variables", ylab = "Variables", main = "Heatmap: Correlation")
+# The relation between age & annual income is stronger than other relations
+
+############################# Data Statistics################################
+
+#basic statistics of age
+summary(customer_data$Age)
+#basic statistics of Annual Income
+summary(customer_data$`Annual.Income..k..`)
+#basic statistics of Spending Score
+summary(customer_data$`Spending.Score..1.100.`)
+
+#standard deviation of age
+sd(customer_data$Age)
+#standard deviation of Annual Income
+sd(customer_data$`Annual.Income..k..`)
+#standard deviation of Spending Score
+sd(customer_data$`Spending.Score..1.100.`)
+
+
+#############################Data Analysis###################################
+##Hierarchical clustering 
+
+# Installing Packages
+install.packages("cluster")
+install.packages("dplyr")
+install.packages("purrr")
+install.packages("carData")
+#load library
+library(cluster)
+library(dplyr)
+library(purrr) # to use map_dbl() function
+library(ggplot2)
+library(factoextra)
+# Summary of dataset in package
+head(customer_data)
+# agglomeration methods to assess
+m <- c("average", "single", "complete")
+names(m) <- c("average", "single", "complete")
+# function to compute hierarchical clustering coefficient
+#the agnes function gives the agglomerative coefficient, which measures the amount of clustering structure found 
+#values closer to 1 suggest strong clustering structure.
+ac <- function(x)
+{
+  agnes(customer_data, method = x)$ac
+}
+map_dbl(m, ac) #then the complete method has strong cluster structure
+# Extract numeric columns
+numeric_data <- customer_data[, numeric_cols]
+# Display some of the numeric columns
+head(numeric_data)
+#calculate gap statistic based on number of clusters
+gap_stat <- clusGap(numeric_data,
+                    FUN = hcut,
+                    nstart = 25,
+                    K.max = 15, #max clusters to consider
+                    B = 50) #total bootstrapped iterations
+
+#plot number of clusters vs. gap statistic
+fviz_gap_stat(gap_stat)#k=3 is the optimal num of clusters
+#compute distance matrix
+d <- dist(numeric_data, method = "euclidean")
+# Fitting Hierarchical clustering Model
+Hierar_cl <- hclust(d, method = "complete")
+Hierar_cl
+# Plotting dendrogram
+plot(Hierar_cl)
+# Cutting tree by no. of clusters
+fit <- cutree(Hierar_cl, k = 3 )
+fit
+table(fit)
+rect.hclust(Hierar_cl, k = 3, border = "blue")
+
+##k-mediod algorithm
+
+#create a plot of the number of clusters vs. the total within sum of squares:
+fviz_nbclust(numeric_data, pam, method = "wss")#k=3 is the optimal num of clustres
+#perform k-medoids clustering with k = 3 clusters
+kmed <- pam(numeric_data, k = 3)
+#view results
+kmed
+#plot results of final k-medoids model
+fviz_cluster(kmed, data = numeric_data)
+
+####conclusion:k-mediod algorithm is better than Hierarchical algorithm,because it is fast.
